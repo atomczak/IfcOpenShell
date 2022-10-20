@@ -130,6 +130,8 @@ private:
 	const IfcParse::schema_definition* schema_;
 	const IfcParse::declaration* ifcroot_type_;
 
+	std::vector<Argument*> internal_attribute_vector_, internal_attribute_vector_simple_type_;
+
 	entity_by_id_t byid;
 	entities_by_type_t bytype;
 	entities_by_type_t bytype_excl;
@@ -175,6 +177,7 @@ public:
 	IfcFile(IfcParse::IfcSpfStream* f);
 	IfcFile(const IfcParse::schema_definition* schema = IfcParse::schema_by_name("IFC4"));
 
+	/// Deleting the file will also delete all new instances that were added to the file (via memory allocation)
 	virtual ~IfcFile();
 
 	file_open_status good() const { return good_; }
@@ -249,7 +252,12 @@ public:
 	/// breadth-first search
 	aggregate_of_instance::ptr traverse_breadth_first(IfcUtil::IfcBaseClass* instance, int max_level=-1);
 
+	/// Get the attribute indices corresponding to the list of entity instances
+	/// returned by getInverse().
+	std::vector<int> get_inverse_indices(int instance_id);
+
 	aggregate_of_instance::ptr getInverse(int instance_id, const IfcParse::declaration* type, int attribute_index);
+	
 	int getTotalInverses(int instance_id);
 
 	template <class T>
@@ -266,7 +274,9 @@ public:
 
 	unsigned int FreshId() { return ++MaxId; }
 
-	unsigned int getMaxId() { return MaxId; }
+	unsigned int getMaxId() const { return MaxId; }
+
+	const IfcParse::declaration* const ifcroot_type() const { return ifcroot_type_; }
 
 	void recalculate_id_counter();
 
@@ -308,6 +318,8 @@ public:
 	bool& parsing_complete() { return parsing_complete_; }
 
 	void build_inverses();
+
+	entity_by_guid_t& internal_guid_map() { return byguid; };
 };
 
 #ifdef WITH_IFCXML

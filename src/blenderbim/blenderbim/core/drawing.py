@@ -36,18 +36,18 @@ def edit_text(ifc, drawing, obj=None):
     drawing.disable_editing_text(obj)
 
 
-def enable_editing_text_product(drawing, obj=None):
-    drawing.enable_editing_text_product(obj)
-    drawing.import_text_product(obj)
+def enable_editing_assigned_product(drawing, obj=None):
+    drawing.enable_editing_assigned_product(obj)
+    drawing.import_assigned_product(obj)
 
 
-def disable_editing_text_product(drawing, obj=None):
-    drawing.disable_editing_text_product(obj)
+def disable_editing_assigned_product(drawing, obj=None):
+    drawing.disable_editing_assigned_product(obj)
 
 
-def edit_text_product(ifc, drawing, obj=None, product=None):
+def edit_assigned_product(ifc, drawing, obj=None, product=None):
     element = ifc.get_entity(obj)
-    existing_product = drawing.get_text_product(element)
+    existing_product = drawing.get_assigned_product(element)
     if existing_product == product:
         return
     if existing_product:
@@ -55,7 +55,7 @@ def edit_text_product(ifc, drawing, obj=None, product=None):
     if product:
         ifc.run("drawing.assign_product", relating_product=product, related_object=element)
     drawing.update_text_value(obj)
-    drawing.disable_editing_text_product(obj)
+    drawing.disable_editing_assigned_product(obj)
 
 
 def load_sheets(drawing):
@@ -81,12 +81,48 @@ def add_sheet(ifc, drawing, titleblock=None):
 
 
 def open_sheet(drawing, sheet=None):
-    drawing.open_svg(drawing.get_sheet_filename(sheet))
+    drawing.open_svg(drawing.get_document_uri(sheet))
 
 
 def remove_sheet(ifc, drawing, sheet=None):
-    ifc.run("document.remove_document", document=sheet)
+    ifc.run("document.remove_information", information=sheet)
     drawing.import_sheets()
+
+
+def load_schedules(drawing):
+    drawing.import_schedules()
+    drawing.enable_editing_schedules()
+
+
+def disable_editing_schedules(drawing):
+    drawing.disable_editing_schedules()
+
+
+def add_schedule(ifc, drawing, uri=None):
+    schedule = ifc.run("document.add_information")
+    reference = ifc.run("document.add_reference", information=schedule)
+    if ifc.get_schema() == "IFC2X3":
+        attributes = {"DocumentId": "X", "Name": "UNTITLED", "Scope": "SCHEDULE"}
+        ifc.run("document.edit_information", information=schedule, attributes=attributes)
+        ifc.run("document.edit_reference", reference=reference, attributes={"Location": uri})
+    else:
+        attributes = {"Identification": "X", "Name": "UNTITLED", "Scope": "SCHEDULE", "Location": uri}
+        ifc.run("document.edit_information", information=schedule, attributes=attributes)
+    drawing.import_schedules()
+
+
+def remove_schedule(ifc, drawing, schedule=None):
+    ifc.run("document.remove_information", information=schedule)
+    drawing.import_schedules()
+
+
+def open_schedule(drawing, schedule=None):
+    drawing.open_spreadsheet(drawing.get_schedule_location(schedule))
+
+
+def update_schedule_name(ifc, drawing, schedule=None, name=None):
+    if drawing.get_name(schedule) != name:
+        ifc.run("document.edit_information", information=schedule, attributes={"Name": name})
 
 
 def load_drawings(drawing):
@@ -112,10 +148,22 @@ def add_drawing(ifc, collector, drawing, target_view=None, location_hint=None):
     )
     group = ifc.run("group.add_group")
     ifc.run("group.edit_group", group=group, attributes={"Name": drawing_name, "ObjectType": "DRAWING"})
-    ifc.run("group.assign_group", group=group, product=element)
+    ifc.run("group.assign_group", group=group, products=[element])
     collector.assign(camera)
     pset = ifc.run("pset.add_pset", product=element, name="EPset_Drawing")
-    ifc.run("pset.edit_pset", pset=pset, properties={"TargetView": target_view, "Scale": "1/100"})
+    ifc.run(
+        "pset.edit_pset",
+        pset=pset,
+        properties={
+            "TargetView": target_view,
+            "Scale": "1/100",
+            "HumanScale": "1:100",
+            "HasUnderlay": False,
+            "HasLinework": True,
+            "HasAnnotation": True,
+            "GlobalReferencing": True,
+        },
+    )
     drawing.import_drawings()
 
 
@@ -142,9 +190,9 @@ def update_drawing_name(ifc, drawing_tool, drawing=None, name=None):
 def add_annotation(ifc, collector, drawing_tool, drawing=None, object_type=None):
     context = drawing_tool.get_annotation_context(drawing_tool.get_drawing_target_view(drawing))
     if not context:
-        return
+        return "No annotation context for drawing"
     drawing_tool.show_decorations()
-    obj = drawing_tool.create_annotation_object(object_type)
+    obj = drawing_tool.create_annotation_object(drawing, object_type)
     element = ifc.get_entity(obj)
     if not element:
         element = drawing_tool.run_root_assign_class(
@@ -155,12 +203,20 @@ def add_annotation(ifc, collector, drawing_tool, drawing=None, object_type=None)
             context=context,
             ifc_representation_class=drawing_tool.get_ifc_representation_class(object_type),
         )
-        ifc.run("group.assign_group", group=drawing_tool.get_drawing_group(drawing), product=element)
+        ifc.run("group.assign_group", group=drawing_tool.get_drawing_group(drawing), products=[element])
     collector.assign(obj)
     drawing_tool.enable_editing(obj)
 
 
+def build_schedule(drawing, schedule=None):
+    drawing.create_svg_schedule(schedule)
+    drawing.open_svg(drawing.get_document_uri(schedule))
+
+
 def sync_references(ifc, collector, drawing_tool, drawing=None):
+    if not drawing_tool.has_linework(drawing):
+        return
+
     context = drawing_tool.get_annotation_context(drawing_tool.get_drawing_target_view(drawing))
     if not context:
         return
@@ -173,7 +229,13 @@ def sync_references(ifc, collector, drawing_tool, drawing=None):
         should_delete_existing_annotation = False
         should_create_annotation = False
 
-        if annotation and (not reference_obj or ifc.is_moved(reference_obj) or ifc.is_edited(reference_obj)):
+        if annotation and (
+            not reference_obj
+            or ifc.is_moved(reference_obj)
+            or ifc.is_edited(reference_obj)
+            or ifc.is_deleted(reference_element)
+            or ifc.is_deleted(annotation)
+        ):
             should_delete_existing_annotation = True
 
         if reference_obj and (should_delete_existing_annotation or not annotation):
@@ -189,7 +251,7 @@ def sync_references(ifc, collector, drawing_tool, drawing=None):
             annotation = drawing_tool.generate_reference_annotation(drawing, reference_element, context)
             if annotation:
                 ifc.run("drawing.assign_product", relating_product=reference_element, related_object=annotation)
-                ifc.run("group.assign_group", group=group, product=annotation)
+                ifc.run("group.assign_group", group=group, products=[annotation])
                 collector.assign(ifc.get_object(annotation))
 
         if reference_obj and ifc.is_moved(reference_obj):

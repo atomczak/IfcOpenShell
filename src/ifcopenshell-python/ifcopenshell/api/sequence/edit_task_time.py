@@ -39,21 +39,39 @@ class Usecase:
         ):
             del self.settings["attributes"]["ScheduleFinish"]
 
-        duration_type = self.settings["attributes"].get("DurationType", self.settings["task_time"].DurationType)
-        if self.settings["attributes"].get("ScheduleFinish", None):
-            self.settings["attributes"]["ScheduleFinish"] = ifcopenshell.util.sequence.get_soonest_working_day(
-                self.settings["attributes"]["ScheduleFinish"], duration_type, self.calendar
+        duration_type = self.settings["attributes"].get(
+            "DurationType", self.settings["task_time"].DurationType
+        )
+        finish = self.settings["attributes"].get("ScheduleFinish", None)
+        if finish:
+            if isinstance(finish, str):
+                finish = datetime.datetime.fromisoformat(finish)
+            self.settings["attributes"]["ScheduleFinish"] = datetime.datetime.combine(
+                ifcopenshell.util.sequence.get_soonest_working_day(
+                    finish, duration_type, self.calendar
+                ),
+                datetime.time(17),
             )
-        if self.settings["attributes"].get("ScheduleStart", None):
-            self.settings["attributes"]["ScheduleStart"] = ifcopenshell.util.sequence.get_soonest_working_day(
-                self.settings["attributes"]["ScheduleStart"], duration_type, self.calendar
+        start = self.settings["attributes"].get("ScheduleStart", None)
+        if start:
+            if isinstance(start, str):
+                start = datetime.datetime.fromisoformat(start)
+            self.settings["attributes"]["ScheduleStart"] = datetime.datetime.combine(
+                ifcopenshell.util.sequence.get_soonest_working_day(
+                    start, duration_type, self.calendar
+                ),
+                datetime.time(9),
             )
 
         for name, value in self.settings["attributes"].items():
             if value is not None:
                 if "Start" in name or "Finish" in name or name == "StatusTime":
                     value = ifcopenshell.util.date.datetime2ifc(value, "IfcDateTime")
-                elif name == "ScheduleDuration" or name == "ActualDuration" or name == "RemainingTime":
+                elif (
+                    name == "ScheduleDuration"
+                    or name == "ActualDuration"
+                    or name == "RemainingTime"
+                ):
                     value = ifcopenshell.util.date.datetime2ifc(value, "IfcDuration")
             setattr(self.settings["task_time"], name, value)
 
@@ -63,9 +81,15 @@ class Usecase:
             and self.settings["task_time"].ScheduleStart
         ):
             self.calculate_finish()
-        elif self.settings["attributes"].get("ScheduleStart", None) and self.settings["task_time"].ScheduleDuration:
+        elif (
+            self.settings["attributes"].get("ScheduleStart", None)
+            and self.settings["task_time"].ScheduleDuration
+        ):
             self.calculate_finish()
-        elif self.settings["attributes"].get("ScheduleFinish", None) and self.settings["task_time"].ScheduleStart:
+        elif (
+            self.settings["attributes"].get("ScheduleFinish", None)
+            and self.settings["task_time"].ScheduleStart
+        ):
             self.calculate_duration()
 
         if self.settings["task_time"].ScheduleDuration and (
@@ -76,27 +100,49 @@ class Usecase:
             ifcopenshell.api.run("sequence.cascade_schedule", self.file, task=self.task)
 
     def calculate_finish(self):
-        finish_date = ifcopenshell.util.sequence.get_finish_date(
-            ifcopenshell.util.date.ifc2datetime(self.settings["task_time"].ScheduleStart),
-            ifcopenshell.util.date.ifc2datetime(self.settings["task_time"].ScheduleDuration),
+        finish = ifcopenshell.util.sequence.get_start_or_finish_date(
+            ifcopenshell.util.date.ifc2datetime(
+                self.settings["task_time"].ScheduleStart
+            ),
+            ifcopenshell.util.date.ifc2datetime(
+                self.settings["task_time"].ScheduleDuration
+            ),
             self.settings["task_time"].DurationType,
             self.calendar,
+            date_type="FINISH",
         )
-        self.settings["task_time"].ScheduleFinish = ifcopenshell.util.date.datetime2ifc(finish_date, "IfcDateTime")
+        self.settings["task_time"].ScheduleFinish = ifcopenshell.util.date.datetime2ifc(
+            finish, "IfcDateTime"
+        )
 
     def calculate_duration(self):
-        start = ifcopenshell.util.date.ifc2datetime(self.settings["task_time"].ScheduleStart)
-        finish = ifcopenshell.util.date.ifc2datetime(self.settings["task_time"].ScheduleFinish)
+        start = ifcopenshell.util.date.ifc2datetime(
+            self.settings["task_time"].ScheduleStart
+        )
+        finish = ifcopenshell.util.date.ifc2datetime(
+            self.settings["task_time"].ScheduleFinish
+        )
         current_date = datetime.date(start.year, start.month, start.day)
         finish_date = datetime.date(finish.year, finish.month, finish.day)
-        duration = datetime.timedelta()
+        duration = datetime.timedelta(days=1)
         while current_date < finish_date:
-            if self.settings["task_time"].DurationType == "ELAPSEDTIME" or not self.calendar:
+            if (
+                self.settings["task_time"].DurationType == "ELAPSEDTIME"
+                or not self.calendar
+            ):
                 duration += datetime.timedelta(days=1)
             elif ifcopenshell.util.sequence.is_working_day(current_date, self.calendar):
                 duration += datetime.timedelta(days=1)
             current_date += datetime.timedelta(days=1)
-        self.settings["task_time"].ScheduleDuration = ifcopenshell.util.date.datetime2ifc(duration, "IfcDuration")
+        self.settings[
+            "task_time"
+        ].ScheduleDuration = ifcopenshell.util.date.datetime2ifc(
+            duration, "IfcDuration"
+        )
 
     def get_task(self):
-        return [e for e in self.file.get_inverse(self.settings["task_time"]) if e.is_a("IfcTask")][0]
+        return [
+            e
+            for e in self.file.get_inverse(self.settings["task_time"])
+            if e.is_a("IfcTask")
+        ][0]

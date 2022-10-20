@@ -106,13 +106,15 @@ class BIM_ADDON_preferences(bpy.types.AddonPreferences):
         name="SVG to DXF Command",
         description="E.g. [['inkscape', svg, '-o', eps], ['pstoedit', '-dt', '-f', 'dxf:-polyaslines -mm', eps, dxf, '-psarg', '-dNOSAFER']]",
     )
-    svg_command: StringProperty(name="SVG Command", description="E.g. [['firefox-bin', path]]")
-    pdf_command: StringProperty(name="PDF Command", description="E.g. [['firefox-bin', path]]")
+    svg_command: StringProperty(name="SVG Command", description="E.g. [['firefox', path]]")
+    pdf_command: StringProperty(name="PDF Command", description="E.g. [['firefox', path]]")
+    spreadsheet_command: StringProperty(name="Spreadsheet Command", description="E.g. [['libreoffice', path]]")
     openlca_port: IntProperty(name="OpenLCA IPC Port", default=8080)
     should_hide_empty_props: BoolProperty(name="Should Hide Empty Properties", default=True)
     should_play_chaching_sound: BoolProperty(
         name="Should Make A Cha-Ching Sound When Project Costs Updates", default=False
     )
+    lock_grids_on_import: BoolProperty(name="Will lock grids upon import", default=True)
 
     def draw(self, context):
         layout = self.layout
@@ -141,11 +143,18 @@ class BIM_ADDON_preferences(bpy.types.AddonPreferences):
         row = layout.row()
         row.prop(self, "pdf_command")
         row = layout.row()
+        row.prop(self, "spreadsheet_command")
+        row = layout.row()
         row.prop(self, "openlca_port")
         row = layout.row()
         row.prop(self, "should_hide_empty_props")
         row = layout.row()
         row.prop(self, "should_play_chaching_sound")
+        row = layout.row()
+        row.prop(self, "lock_grids_on_import")
+
+        row = layout.row()
+        row.prop(context.scene.BIMProjectProperties, "should_disable_undo_on_save")
 
         row = layout.row()
         row.prop(context.scene.BIMModelProperties, "occurrence_name_style")

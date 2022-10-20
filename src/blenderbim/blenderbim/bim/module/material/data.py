@@ -25,6 +25,7 @@ import blenderbim.tool as tool
 
 def refresh():
     MaterialsData.is_loaded = False
+    ObjectMaterialData.is_loaded = False
 
 
 class MaterialsData:
@@ -41,6 +42,12 @@ class MaterialsData:
 
     @classmethod
     def total_materials(cls):
+        if tool.Ifc.get_schema() == "IFC2X3":
+            return (
+                len(tool.Ifc.get().by_type("IfcMaterial"))
+                + len(tool.Ifc.get().by_type("IfcMaterialLayerSet"))
+                + len(tool.Ifc.get().by_type("IfcMaterialList"))
+            )
         return (
             len(tool.Ifc.get().by_type("IfcMaterial"))
             + len(tool.Ifc.get().by_type("IfcMaterialConstituentSet"))
@@ -61,3 +68,36 @@ class MaterialsData:
         if tool.Ifc.get_schema() == "IFC2X3":
             material_types = ["IfcMaterial", "IfcMaterialLayerSet", "IfcMaterialList"]
         return [(m, m, "") for m in material_types]
+
+
+class ObjectMaterialData:
+    data = {}
+    is_loaded = False
+
+    @classmethod
+    def load(cls):
+        cls.data = {
+            "materials": cls.materials(),
+            "type_material": cls.type_material(),
+        }
+        cls.is_loaded = True
+
+    @classmethod
+    def materials(cls):
+        return sorted(
+            [(str(m.id()), m.Name or "Unnamed", "") for m in tool.Ifc.get().by_type("IfcMaterial")], key=lambda x: x[1]
+        )
+
+    @classmethod
+    def type_material(cls):
+        element = tool.Ifc.get_entity(bpy.context.active_object)
+        element_type = ifcopenshell.util.element.get_type(element)
+        if element_type and element_type != element:
+            material = ifcopenshell.util.element.get_material(element_type)
+            if not material:
+                return
+            if material.is_a() in ("IfcMaterialLayerSetUsage", "IfcMaterialLayerSet"):
+                name_attr = "LayerSetName"
+            else:
+                name_attr = "Name"
+            return getattr(material, name_attr, "Unnamed") or "Unnamed"

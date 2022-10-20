@@ -74,51 +74,11 @@ class TestClearScale(NewFile):
         assert list(obj.scale) == [1, 1, 1]
 
 
-class TestCreateDynamicVoids(NewFile):
-    def test_run(self):
-        ifc = ifcopenshell.file()
-        tool.Ifc.set(ifc)
-        wall = ifc.createIfcWall()
-        opening = ifc.createIfcOpeningElement()
-        ifcopenshell.api.run("void.add_opening", ifc, opening=opening, element=wall)
-        wall_obj = bpy.data.objects.new("Object", bpy.data.meshes.new("Mesh"))
-        opening_obj = bpy.data.objects.new("Object", bpy.data.meshes.new("Mesh"))
-        tool.Ifc.link(wall, wall_obj)
-        tool.Ifc.link(opening, opening_obj)
-        subject.create_dynamic_voids(wall_obj)
-        modifier = wall_obj.modifiers[0]
-        assert modifier.type == "BOOLEAN"
-        assert modifier.name == "IfcOpeningElement"
-        assert modifier.operation == "DIFFERENCE"
-        assert modifier.object == opening_obj
-        assert modifier.solver == "EXACT"
-        assert modifier.use_self is True
-
-
 class TestDeleteData(NewFile):
     def test_run(self):
         data = bpy.data.meshes.new("Mesh")
         subject.delete_data(data)
         assert not bpy.data.meshes.get("Mesh")
-
-
-class TestDoesObjectHaveMeshWithFaces(NewFile):
-    def test_empties_return_false(self):
-        obj = bpy.data.objects.new("Object", None)
-        assert subject.does_object_have_mesh_with_faces(obj) is False
-
-    def test_non_meshes_return_false(self):
-        obj = bpy.data.objects.new("Object", bpy.data.cameras.new("Curve"))
-        assert subject.does_object_have_mesh_with_faces(obj) is False
-
-    def test_meshes_without_faces_return_false(self):
-        obj = bpy.data.objects.new("Object", bpy.data.meshes.new("Mesh"))
-        assert subject.does_object_have_mesh_with_faces(obj) is False
-
-    def test_meshes_with_faces_return_true(self):
-        bpy.ops.mesh.primitive_cube_add()
-        obj = bpy.data.objects.get("Cube")
-        assert subject.does_object_have_mesh_with_faces(obj) is True
 
 
 class TestDoesRepresentationIdExist(NewFile):
@@ -282,7 +242,7 @@ class TestImportRepresentation(NewFile):
         element = ifc.by_type("IfcWall")[0]
         tool.Ifc.link(element, obj)
         representation = element.Representation.Representations[0]
-        mesh = subject.import_representation(obj, representation, enable_dynamic_voids=False)
+        mesh = subject.import_representation(obj, representation)
         assert len(mesh.polygons) == 12
         assert mesh.materials[0] == material
 
@@ -293,7 +253,7 @@ class TestImportRepresentation(NewFile):
         element = ifc.by_type("IfcWall")[0]
         tool.Ifc.link(element, obj)
         representation = element.Representation.Representations[0]
-        mesh = subject.import_representation(obj, representation, enable_dynamic_voids=False)
+        mesh = subject.import_representation(obj, representation)
         assert len(mesh.polygons) == 0
         assert len(mesh.edges) == 4
 
@@ -398,6 +358,17 @@ class TestRecordObjectPosition(NewFile):
         assert obj.BIMObjectProperties.rotation_checksum == repr(np.array(obj.matrix_world.to_3x3()).tobytes())
 
 
+class TestRemoveConnection(NewFile):
+    def test_run(self):
+        ifc = ifcopenshell.file()
+        tool.Ifc().set(ifc)
+        element1 = ifcopenshell.api.run("root.create_entity", ifc, ifc_class="IfcWall")
+        element2 = ifcopenshell.api.run("root.create_entity", ifc, ifc_class="IfcWall")
+        rel = ifcopenshell.api.run("geometry.connect_path", ifc, relating_element=element1, related_element=element2)
+        subject.remove_connection(rel)
+        assert not tool.Ifc.get().by_type("IfcRelConnectsPathElements")
+
+
 class TestRenameObject(NewFile):
     def test_run(self):
         obj = bpy.data.meshes.new("Mesh")
@@ -448,6 +419,28 @@ class TestRunGeometryUpdateRepresentation(NewFile):
 class TestRunStyleAddStyle(NewFile):
     def test_nothing(self):
         pass
+
+
+class TestSelectConnection(NewFile):
+    def test_run(self):
+        ifc = ifcopenshell.file()
+        tool.Ifc().set(ifc)
+
+        element1 = ifcopenshell.api.run("root.create_entity", ifc, ifc_class="IfcWall")
+        obj1 = bpy.data.objects.new("Object", None)
+        bpy.context.scene.collection.objects.link(obj1)
+        tool.Ifc.link(element1, obj1)
+
+        element2 = ifcopenshell.api.run("root.create_entity", ifc, ifc_class="IfcWall")
+        obj2 = bpy.data.objects.new("Object", None)
+        bpy.context.scene.collection.objects.link(obj2)
+        tool.Ifc.link(element2, obj2)
+
+        rel = ifcopenshell.api.run("geometry.connect_path", ifc, relating_element=element1, related_element=element2)
+
+        subject.select_connection(rel)
+        assert obj1 in bpy.context.selected_objects
+        assert obj2 in bpy.context.selected_objects
 
 
 class TestShouldForceFacetedBrep(NewFile):

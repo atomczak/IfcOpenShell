@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with BlenderBIM Add-on.  If not, see <http://www.gnu.org/licenses/>.
 
+from blenderbim.bim.helper import prop_with_search
 import blenderbim.tool as tool
 from bpy.types import Panel, UIList
 from blenderbim.bim.ifc import IfcStore
@@ -46,7 +47,7 @@ class BIM_PT_systems(Panel):
             row.operator("bim.disable_system_editing_ui", text="", icon="CANCEL")
 
             row = self.layout.row(align=True)
-            row.prop(self.props, "system_class", text="")
+            prop_with_search(row, self.props, "system_class", text="")
             row.operator("bim.add_system", text="", icon="ADD")
         else:
             row.operator("bim.load_systems", text="", icon="GREASEPENCIL")
@@ -140,7 +141,9 @@ class BIM_PT_ports(Panel):
         if not context.active_object:
             return False
         element = tool.Ifc.get_entity(context.active_object)
-        if not element or not element.is_a("IfcDistributionElement"):
+        if not element:
+            return False
+        if not element.is_a("IfcDistributionElement") and not element.is_a("IfcDistributionElementType"):
             return False
         return True
 
@@ -183,6 +186,7 @@ class BIM_PT_port(Panel):
         row.operator("bim.set_flow_direction", icon="BACK", text="").direction = "SINK"
         row.operator("bim.set_flow_direction", icon="ARROW_LEFTRIGHT", text="").direction = "SOURCEANDSINK"
         row.operator("bim.set_flow_direction", icon="RESTRICT_INSTANCED_ON", text="").direction = "NOTDEFINED"
+        row.operator("bim.remove_port", icon="X", text="")
 
 
 class BIM_UL_systems(UIList):

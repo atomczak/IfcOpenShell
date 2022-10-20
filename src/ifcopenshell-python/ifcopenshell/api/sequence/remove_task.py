@@ -40,9 +40,16 @@ class Usecase:
             elif inverse.is_a("IfcRelNests"):
                 if inverse.RelatingObject == self.settings["task"]:
                     for related_object in inverse.RelatedObjects:
-                        ifcopenshell.api.run("sequence.remove_task", self.file, task=related_object)
+                        ifcopenshell.api.run(
+                            "sequence.remove_task", self.file, task=related_object
+                        )
                 elif inverse.RelatedObjects == tuple(self.settings["task"]):
                     self.file.remove(inverse)
             elif inverse.is_a("IfcRelAssignsToControl"):
-                self.file.remove(inverse)
+                if len(inverse.RelatedObjects) == 1:
+                    self.file.remove(inverse)
+                else:
+                    related_objects = list(inverse.RelatedObjects)
+                    related_objects.remove(self.settings["task"])
+                    inverse.RelatedObjects = related_objects
         self.file.remove(self.settings["task"])

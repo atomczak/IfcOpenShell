@@ -22,7 +22,8 @@ from ifcopenshell.api.material.data import Data
 from ifcopenshell.api.profile.data import Data as ProfileData
 from blenderbim.bim.ifc import IfcStore
 from blenderbim.bim.helper import draw_attributes
-from blenderbim.bim.module.material.data import MaterialsData
+from blenderbim.bim.helper import prop_with_search
+from blenderbim.bim.module.material.data import MaterialsData, ObjectMaterialData
 
 
 class BIM_PT_materials(Panel):
@@ -50,7 +51,7 @@ class BIM_PT_materials(Panel):
             row.operator("bim.disable_editing_materials", text="", icon="CANCEL")
         else:
             row = self.layout.row(align=True)
-            row.prop(self.props, "material_type", text="")
+            prop_with_search(row, self.props, "material_type", text="")
             row.operator("bim.load_materials", text="", icon="IMPORT")
             return
 
@@ -61,12 +62,18 @@ class BIM_PT_materials(Panel):
             row.operator("bim.add_material", text="", icon="ADD")
             if self.props.materials and self.props.active_material_index < len(self.props.materials):
                 material = self.props.materials[self.props.active_material_index]
-                row.operator("bim.remove_material", text="", icon="X").material = material.ifc_definition_id
+                if material.ifc_definition_id:
+                    op = row.operator("bim.select_by_material", text="", icon="RESTRICT_SELECT_OFF")
+                    op.material = material.ifc_definition_id
+                    row.operator("bim.remove_material", text="", icon="X").material = material.ifc_definition_id
         else:
             row.operator("bim.add_material_set", text="", icon="ADD").set_type = self.props.material_type
             if self.props.materials and self.props.active_material_index < len(self.props.materials):
                 material = self.props.materials[self.props.active_material_index]
-                row.operator("bim.remove_material_set", text="", icon="X").material = material.ifc_definition_id
+                if material.ifc_definition_id:
+                    op = row.operator("bim.select_by_material", text="", icon="RESTRICT_SELECT_OFF")
+                    op.material = material.ifc_definition_id
+                    row.operator("bim.remove_material_set", text="", icon="X").material = material.ifc_definition_id
 
         self.layout.template_list("BIM_UL_materials", "", self.props, "materials", self.props, "active_material_index")
 
@@ -115,6 +122,9 @@ class BIM_PT_object_material(Panel):
         return True
 
     def draw(self, context):
+        if not ObjectMaterialData.is_loaded:
+            ObjectMaterialData.load()
+
         self.file = IfcStore.get_file()
         self.oprops = context.active_object.BIMObjectProperties
         self.props = context.active_object.BIMObjectMaterialProperties
@@ -126,11 +136,15 @@ class BIM_PT_object_material(Panel):
             ProfileData.load(self.file)
         self.product_data = Data.products[self.oprops.ifc_definition_id]
 
-        if not Data.materials:
+        if not ObjectMaterialData.data["materials"]:
             row = self.layout.row(align=True)
             row.label(text="No Materials Available")
             row.operator("bim.add_material", icon="ADD", text="").obj = ""
             return
+
+        if ObjectMaterialData.data["type_material"]:
+            row = self.layout.row(align=True)
+            row.label(text="Inherited Material: " + ObjectMaterialData.data["type_material"], icon="FILE_PARENT")
 
         if self.product_data:
             if self.product_data["type"] == "IfcMaterialConstituentSet":
@@ -175,9 +189,9 @@ class BIM_PT_object_material(Panel):
             return self.draw_material_ui()
 
         row = self.layout.row(align=True)
-        row.prop(self.props, "material_type", text="")
+        prop_with_search(row, self.props, "material_type", text="")
         if self.props.material_type == "IfcMaterial" or self.props.material_type == "IfcMaterialList":
-            row.prop(self.props, "material", text="")
+            prop_with_search(row, self.props, "material", text="")
         row.operator("bim.assign_material", icon="ADD", text="")
 
     def draw_material_ui(self):
@@ -207,8 +221,7 @@ class BIM_PT_object_material(Panel):
         return self.draw_read_only_single_ui()
 
     def draw_editable_single_ui(self):
-        row = self.layout.row(align=True)
-        row.prop(self.props, "material", text="")
+        prop_with_search(self.layout, self.props, "material", text="")
 
     def draw_read_only_single_ui(self):
         material = Data.materials[self.product_data["id"]]
@@ -229,7 +242,7 @@ class BIM_PT_object_material(Panel):
             row.prop(attribute, "string_value", text=attribute.name)
             row.prop(attribute, "is_null", icon="RADIOBUT_OFF" if attribute.is_null else "RADIOBUT_ON", text="")
         row = self.layout.row(align=True)
-        row.prop(self.props, "material", text="")
+        prop_with_search(row, self.props, "material", text="")
 
         op = row.operator(f"bim.add_{self.set_item_name}", icon="ADD", text="")
         setattr(op, f"{self.set_item_name}_set", self.material_set_id)
@@ -388,4 +401,21 @@ class BIM_UL_materials(UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname):
         if item:
             row = layout.row(align=True)
-            row.label(text=item.name)
+
+            if item.is_category:
+                if item.is_expanded:
+                    row.operator(
+                        "bim.contract_material_category", text="", emboss=False, icon="DISCLOSURE_TRI_DOWN"
+                    ).category = item.name
+                else:
+                    row.operator(
+                        "bim.expand_material_category", text="", emboss=False, icon="DISCLOSURE_TRI_RIGHT"
+                    ).category = item.name
+                row.label(text=item.name or "Uncategorised")
+            else:
+                row.label(text="", icon="BLANK1")
+                row.label(text=item.name, icon="MATERIAL")
+
+                row2 = row.row()
+                row2.alignment = "RIGHT"
+                row2.label(text=str(item.total_elements))

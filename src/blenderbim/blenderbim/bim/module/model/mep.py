@@ -38,7 +38,7 @@ class MepGenerator:
     def __init__(self, relating_type):
         self.relating_type = relating_type
 
-    def generate(self):
+    def generate(self, link_to_scene=True):
         self.file = tool.Ifc.get()
         self.collection = bpy.context.view_layer.active_layer_collection.collection
 
@@ -54,26 +54,25 @@ class MepGenerator:
                 self.width = dimensions.get("NominalDiameterOrWidth")
                 self.height = dimensions.get("NominalHeight")
                 self.length = 1
-                self.rotation = 0
 
-                return self.derive_from_cursor()
+                return self.derive_from_cursor(link_to_scene=link_to_scene)
         elif self.relating_type.is_a("IfcPipeSegmentType"):
             pass
 
-    def derive_from_cursor(self):
+    def derive_from_cursor(self, link_to_scene):
         self.location = bpy.context.scene.cursor.location
-        return self.create_rectangle_segment()
+        return self.create_rectangle_segment(link_to_scene)
 
-    def create_rectangle_segment(self):
+    def create_rectangle_segment(self, link_to_scene):
         verts = [
-            Vector((0, self.width, 0)),
-            Vector((0, 0, 0)),
-            Vector((0, self.width, self.height)),
-            Vector((0, 0, self.height)),
-            Vector((self.length, self.width, 0)),
-            Vector((self.length, 0, 0)),
-            Vector((self.length, self.width, self.height)),
-            Vector((self.length, 0, self.height)),
+            Vector((-self.width / 2, self.height / 2, 0)),
+            Vector((-self.width / 2, -self.height / 2, 0)),
+            Vector((-self.width / 2, self.height / 2, self.length)),
+            Vector((-self.width / 2, -self.height / 2, self.length)),
+            Vector((self.width / 2, self.height / 2, 0)),
+            Vector((self.width / 2, -self.height / 2, 0)),
+            Vector((self.width / 2, self.height / 2, self.length)),
+            Vector((self.width / 2, -self.height / 2, self.length)),
         ]
         faces = [
             [1, 3, 2, 0],
@@ -90,9 +89,11 @@ class MepGenerator:
         ifc_class = ifc_classes[0]
 
         obj = bpy.data.objects.new(tool.Model.generate_occurrence_name(self.relating_type, ifc_class), mesh)
-        obj.location = self.location
-        obj.rotation_euler[2] = self.rotation
-        self.collection.objects.link(obj)
+        if link_to_scene:
+            obj.location = self.location
+            obj.rotation_euler[0] = math.pi / 2
+            obj.rotation_euler[2] = math.pi / 2
+            self.collection.objects.link(obj)
 
         bpy.ops.bim.assign_class(
             obj=obj.name,
@@ -100,9 +101,27 @@ class MepGenerator:
             ifc_representation_class="IfcExtrudedAreaSolid/IfcRectangleProfileDef",
         )
 
-        blenderbim.core.type.assign_type(tool.Ifc, tool.Type, element=tool.Ifc.get_entity(obj), type=self.relating_type)
-        element = self.file.by_id(obj.BIMObjectProperties.ifc_definition_id)
+        element = tool.Ifc.get_entity(obj)
+
+        blenderbim.core.type.assign_type(tool.Ifc, tool.Type, element=element, type=self.relating_type)
         pset = ifcopenshell.api.run("pset.add_pset", self.file, product=element, name="EPset_Parametric")
         ifcopenshell.api.run("pset.edit_pset", self.file, pset=pset, properties={"Engine": "BlenderBIM.Mep"})
-        obj.select_set(True)
+
+        start_port_matrix = Matrix()
+        end_port_matrix = Matrix.Translation((0, 0, self.length))
+
+        for mat in [start_port_matrix, end_port_matrix]:
+            port = tool.Ifc.run("root.create_entity", ifc_class="IfcDistributionPort")
+            tool.Ifc.run("system.assign_port", element=element, port=port)
+            tool.Ifc.run("geometry.edit_object_placement", product=port, matrix=obj.matrix_world @ mat, is_si=True)
+
+        try:
+            obj.select_set(True)
+        except RuntimeError:
+            def msg(self, context):
+                txt = "The created object could not be assigned to a collection. "
+                txt += "Has any IfcSpatialElement been deleted?"
+                self.layout.label(text=txt)
+
+            bpy.context.window_manager.popup_menu(msg, title="Error", icon="ERROR")
         return obj

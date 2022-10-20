@@ -49,6 +49,16 @@ class DisableEditingMaterials(bpy.types.Operator, tool.Ifc.Operator):
         core.disable_editing_materials(tool.Material)
 
 
+class SelectByMaterial(bpy.types.Operator, tool.Ifc.Operator):
+    bl_idname = "bim.select_by_material"
+    bl_label = "Select By Material"
+    bl_options = {"REGISTER", "UNDO"}
+    material: bpy.props.IntProperty()
+
+    def _execute(self, context):
+        core.select_by_material(tool.Material, material=tool.Ifc.get().by_id(self.material))
+
+
 class AssignParameterizedProfile(bpy.types.Operator):
     bl_idname = "bim.assign_parameterized_profile"
     bl_label = "Assign Parameterized Profile"
@@ -768,3 +778,31 @@ class CopyMaterial(bpy.types.Operator):
         if material.id() in object_material_ids:
             return
         obj.data.materials.append(IfcStore.get_element(material.id()))
+
+
+class ExpandMaterialCategory(bpy.types.Operator):
+    bl_idname = "bim.expand_material_category"
+    bl_label = "Expand Material Category"
+    bl_options = {"REGISTER", "UNDO"}
+    category: bpy.props.StringProperty()
+
+    def execute(self, context):
+        props = context.scene.BIMMaterialProperties
+        for category in [c for c in props.materials if c.is_category and c.name == self.category]:
+            category.is_expanded = True
+        core.load_materials(tool.Material, props.material_type)
+        return {"FINISHED"}
+
+
+class ContractMaterialCategory(bpy.types.Operator):
+    bl_idname = "bim.contract_material_category"
+    bl_label = "Contract Material Category"
+    bl_options = {"REGISTER", "UNDO"}
+    category: bpy.props.StringProperty()
+
+    def execute(self, context):
+        props = context.scene.BIMMaterialProperties
+        for category in [c for c in props.materials if c.is_category and c.name == self.category]:
+            category.is_expanded = False
+        core.load_materials(tool.Material, props.material_type)
+        return {"FINISHED"}

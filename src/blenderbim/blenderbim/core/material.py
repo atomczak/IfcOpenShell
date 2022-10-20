@@ -59,10 +59,14 @@ def remove_material_set(ifc, material_tool, material=None):
         material_tool.import_material_definitions(material_tool.get_active_material_type())
 
 
-def load_materials(material, material_type):
+def load_materials(material, material_type=None):
     material.import_material_definitions(material_type)
     material.enable_editing_materials()
 
 
 def disable_editing_materials(material):
     material.disable_editing_materials()
+
+
+def select_by_material(material_tool, material=None):
+    material_tool.select_elements(material_tool.get_elements_by_material(material))

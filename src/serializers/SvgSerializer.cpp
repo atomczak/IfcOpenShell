@@ -36,7 +36,6 @@
 #include <TopoDS_Edge.hxx>
 #include <TopExp_Explorer.hxx>
 #include <BRep_Tool.hxx>
-#include <BRepAlgo_Section.hxx>
 #include <BRepTools.hxx>
 #include <BRepAlgoAPI_Section.hxx>
 #include <ShapeAnalysis_FreeBounds.hxx>
@@ -809,7 +808,7 @@ void SvgSerializer::write(const geometry_data& data) {
 					const std::string& ty_entity_name = ty->declaration().name();
 					// Damn you, IFC
 					if (ty_entity_name == "IfcDoorStyle" || ty_entity_name == "IfcDoorType") {
-						operation_type = *((IfcUtil::IfcBaseEntity*)ty)->get("OperationType");
+						operation_type = (std::string)*((IfcUtil::IfcBaseEntity*)ty)->get("OperationType");
 					}
 				}
 			}

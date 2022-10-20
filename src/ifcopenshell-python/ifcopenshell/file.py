@@ -180,14 +180,12 @@ class file(object):
 
         ifc_file = ifcopenshell.open(file_path)
         products = ifc_file.by_type("IfcProduct")
-        print(products[0].id(), products[0].GlobalId)
-        >>> 122 2XQ$n5SLP5MBLyL442paFx
-        # Subscripting
-        print(products[0] == ifc_file[122] == ifc_file['2XQ$n5SLP5MBLyL442paFx'])
-        >>> True
+        print(products[0].id(), products[0].GlobalId) # 122 2XQ$n5SLP5MBLyL442paFx
+        print(products[0] == ifc_file[122] == ifc_file["2XQ$n5SLP5MBLyL442paFx"]) # True
     """
 
     def __init__(self, f=None, schema=None):
+        """Create a new file object"""
         if f is not None:
             self.wrapped_data = f
         else:
@@ -205,7 +203,8 @@ class file(object):
             self.history.pop(0)
 
     def begin_transaction(self):
-        self.transaction = Transaction(self)
+        if self.history_size:
+            self.transaction = Transaction(self)
 
     def end_transaction(self):
         if self.transaction:
@@ -247,12 +246,12 @@ class file(object):
         Example::
 
             f = ifcopenshell.file()
-            f.create_entity('IfcPerson')
-            >>> #1=IfcPerson($,$,$,$,$,$,$,$)
-            f.create_entity('IfcPerson', 'Foobar')
-            >>> #2=IfcPerson('Foobar',$,$,$,$,$,$,$)
-            f.create_entity('IfcPerson', Identification='Foobar')
-            >>> #3=IfcPerson('Foobar',$,$,$,$,$,$,$)
+            f.create_entity("IfcPerson")
+            # >>> #1=IfcPerson($,$,$,$,$,$,$,$)
+            f.create_entity("IfcPerson", "Foobar")
+            # >>> #2=IfcPerson('Foobar',$,$,$,$,$,$,$)
+            f.create_entity("IfcPerson", Identification="Foobar")
+            # >>> #3=IfcPerson('Foobar',$,$,$,$,$,$,$)
         """
         eid = kwargs.pop("id", -1)
 
@@ -378,17 +377,29 @@ class file(object):
 
         return [entity_instance(e, self) for e in fn(inst.wrapped_data, max_levels)]
 
-    def get_inverse(self, inst, allow_duplicate=False):
+    def get_inverse(self, inst, allow_duplicate=False, with_attribute_indices=False):
         """Return a list of entities that reference this entity
 
         :param inst: The entity instance to get inverse relationships
         :type inst: ifcopenshell.entity_instance.entity_instance
+        :param allow_duplicate: Returns a `list` when True, `set` when False
+        :param with_attribute_indices: Returns pairs of <i, idx>
+           where i[idx] is inst or contains inst. Requires allow_duplicate=True
         :returns: A list of ifcopenshell.entity_instance.entity_instance objects
         :rtype: list
         """
+        if with_attribute_indices and not allow_duplicate:
+            raise ValueError("with_attribute_indices requires allow_duplicate to be True")
+
         inverses = [entity_instance(e, self) for e in self.wrapped_data.get_inverse(inst.wrapped_data)]
+
         if allow_duplicate:
-            return inverses
+            if with_attribute_indices:
+                idxs = self.wrapped_data.get_inverse_indices(inst.wrapped_data)
+                return list(zip(inverses, idxs))
+            else:
+                return inverses
+
         return set(inverses)
 
     def get_total_inverses(self, inst):

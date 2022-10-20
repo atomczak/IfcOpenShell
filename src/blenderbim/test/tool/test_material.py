@@ -68,20 +68,46 @@ class TestGetActiveMaterialType(NewFile):
         assert subject.get_active_material_type() == "IfcMaterialLayerSet"
 
 
+class TestGetElementsByMaterial(NewFile):
+    def test_run(self):
+        ifc = ifcopenshell.file()
+        tool.Ifc.set(ifc)
+        element = ifcopenshell.api.run("root.create_entity", ifc, ifc_class="IfcWall")
+        material = ifcopenshell.api.run("material.add_material", ifc)
+        ifcopenshell.api.run("material.assign_material", ifc, product=element, material=material)
+        assert subject.get_elements_by_material(material) == {element}
+
+
 class TestGetName(NewFile):
     def test_run(self):
         assert subject.get_name(bpy.data.materials.new("Material")) == "Material"
 
 
 class TestImportMaterialDefinitions(NewFile):
-    def test_import_materials(self):
+    def test_import_materials_grouped_by_categories(self):
         ifc = ifcopenshell.file()
         tool.Ifc.set(ifc)
-        material = ifc.createIfcMaterial(Name="Name")
+        material = ifc.createIfcMaterial(Name="Name", Category="Category")
         subject.import_material_definitions("IfcMaterial")
         props = bpy.context.scene.BIMMaterialProperties
-        assert props.materials[0].ifc_definition_id == material.id()
-        assert props.materials[0].name == "Name"
+        assert props.materials[0].ifc_definition_id == 0
+        assert props.materials[0].name == "Category"
+        assert props.materials[0].is_category is True
+        assert props.materials[0].is_expanded is False
+        assert len(props.materials) == 1
+
+    def test_importing_expanded_material_categories(self):
+        ifc = ifcopenshell.file()
+        tool.Ifc.set(ifc)
+        material = ifc.createIfcMaterial(Name="Name", Category="Category")
+        subject.import_material_definitions("IfcMaterial")
+        props = bpy.context.scene.BIMMaterialProperties
+        props.materials[0].is_expanded = True
+        subject.import_material_definitions("IfcMaterial")
+        assert len(props.materials) == 2
+        assert props.materials[1].ifc_definition_id == material.id()
+        assert props.materials[1].name == "Name"
+        assert props.materials[1].total_elements == 0
 
     def test_import_material_layer_sets(self):
         ifc = ifcopenshell.file()
@@ -91,6 +117,7 @@ class TestImportMaterialDefinitions(NewFile):
         props = bpy.context.scene.BIMMaterialProperties
         assert props.materials[0].ifc_definition_id == material.id()
         assert props.materials[0].name == "Name"
+        assert props.materials[0].total_elements == 0
 
     def test_import_material_profile_sets(self):
         ifc = ifcopenshell.file()
@@ -100,6 +127,7 @@ class TestImportMaterialDefinitions(NewFile):
         props = bpy.context.scene.BIMMaterialProperties
         assert props.materials[0].ifc_definition_id == material.id()
         assert props.materials[0].name == "Name"
+        assert props.materials[0].total_elements == 0
 
     def test_import_material_constituent_sets(self):
         ifc = ifcopenshell.file()
@@ -109,6 +137,7 @@ class TestImportMaterialDefinitions(NewFile):
         props = bpy.context.scene.BIMMaterialProperties
         assert props.materials[0].ifc_definition_id == material.id()
         assert props.materials[0].name == "Name"
+        assert props.materials[0].total_elements == 0
 
     def test_import_material_lists(self):
         ifc = ifcopenshell.file()
@@ -118,6 +147,7 @@ class TestImportMaterialDefinitions(NewFile):
         props = bpy.context.scene.BIMMaterialProperties
         assert props.materials[0].ifc_definition_id == material.id()
         assert props.materials[0].name == "Unnamed"
+        assert props.materials[0].total_elements == 0
 
 
 class TestIsEditingMaterials(NewFile):
@@ -126,3 +156,15 @@ class TestIsEditingMaterials(NewFile):
         subject.is_editing_materials() is False
         bpy.context.scene.BIMMaterialProperties.is_editing = True
         subject.is_editing_materials() is True
+
+
+class TestSelectElements(NewFile):
+    def test_run(self):
+        ifc = ifcopenshell.file()
+        tool.Ifc().set(ifc)
+        element = ifcopenshell.api.run("root.create_entity", ifc, ifc_class="IfcPump")
+        obj = bpy.data.objects.new("Object", None)
+        bpy.context.scene.collection.objects.link(obj)
+        tool.Ifc.link(element, obj)
+        subject.select_elements([element])
+        assert obj in bpy.context.selected_objects

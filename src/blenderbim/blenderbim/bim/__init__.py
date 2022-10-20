@@ -27,6 +27,7 @@ modules = {
     "root": None,
     "unit": None,
     "model": None,
+    "cad": None,
     "georeference": None,
     "context": None,
     "drawing": None,
@@ -61,6 +62,7 @@ modules = {
     "clash": None,
     "lca": None,
     "csv": None,
+    "tester": None,
     "bimtester": None,
     "diff": None,
     "patch": None,
@@ -91,7 +93,10 @@ classes = [
     operator.SelectIfcFile,
     operator.SelectSchemaDir,
     operator.SelectURIAttribute,
+    operator.EditBlenderCollection,
+    operator.BIM_OT_open_webbrowser,
     prop.StrProperty,
+    operator.BIM_OT_enum_property_search,  # /!\ Register AFTER prop.StrProperty
     prop.ObjProperty,
     prop.Attribute,
     prop.ModuleVisibility,
@@ -130,7 +135,8 @@ for mod in modules.values():
 
 def on_register(scene):
     handler.setDefaultProperties(scene)
-    bpy.app.handlers.depsgraph_update_post.remove(on_register)
+    if not bpy.app.background:
+        bpy.app.handlers.depsgraph_update_post.remove(on_register)
 
 
 def register():

@@ -20,6 +20,7 @@ import bpy
 import blenderbim.bim.module.root.prop as root_prop
 from bpy.types import Panel
 from blenderbim.bim.ifc import IfcStore
+from blenderbim.bim.helper import prop_with_search
 from blenderbim.bim.module.root.data import IfcClassData
 
 
@@ -53,8 +54,8 @@ class BIM_PT_class(Panel):
                 row.operator("bim.disable_reassign_class", icon="CANCEL", text="")
                 self.draw_class_dropdowns(
                     context,
-                    root_prop.getIfcPredefinedTypes(context.scene.BIMRootProperties, context),
-                    should_draw_product=False,
+                    root_prop.get_ifc_predefined_types(context.scene.BIMRootProperties, context),
+                    is_reassigning_class=True,
                 )
             else:
                 row = self.layout.row(align=True)
@@ -66,7 +67,7 @@ class BIM_PT_class(Panel):
                 if IfcStore.get_file().by_id(props.ifc_definition_id).is_a("IfcRoot"):
                     row.operator("bim.enable_reassign_class", icon="GREASEPENCIL", text="")
         else:
-            ifc_predefined_types = root_prop.getIfcPredefinedTypes(context.scene.BIMRootProperties, context)
+            ifc_predefined_types = root_prop.get_ifc_predefined_types(context.scene.BIMRootProperties, context)
             self.draw_class_dropdowns(context, ifc_predefined_types)
             row = self.layout.row(align=True)
             op = row.operator("bim.assign_class")
@@ -74,18 +75,16 @@ class BIM_PT_class(Panel):
             op.predefined_type = context.scene.BIMRootProperties.ifc_predefined_type if ifc_predefined_types else ""
             op.userdefined_type = context.scene.BIMRootProperties.ifc_userdefined_type
 
-    def draw_class_dropdowns(self, context, ifc_predefined_types, should_draw_product=True):
+    def draw_class_dropdowns(self, context, ifc_predefined_types, is_reassigning_class=False):
         props = context.scene.BIMRootProperties
-        if should_draw_product:
-            row = self.layout.row()
-            row.prop(props, "ifc_product")
-        row = self.layout.row()
-        row.prop(props, "ifc_class")
+        layout = self.layout
+        if not is_reassigning_class:
+            prop_with_search(layout, props, "ifc_product")
+        prop_with_search(layout, props, "ifc_class")
         if ifc_predefined_types:
-            row = self.layout.row()
-            row.prop(props, "ifc_predefined_type")
-        if ifc_predefined_types == "USERDEFINED":
-            row = self.layout.row()
-            row.prop(props, "ifc_userdefined_type")
-        row = self.layout.row()
-        row.prop(context.scene.BIMRootProperties, "contexts")
+            prop_with_search(layout, props, "ifc_predefined_type")
+            if props.ifc_predefined_type == "USERDEFINED":
+                row = layout.row()
+                row.prop(props, "ifc_userdefined_type")
+        if not is_reassigning_class:
+            prop_with_search(layout, props, "contexts")

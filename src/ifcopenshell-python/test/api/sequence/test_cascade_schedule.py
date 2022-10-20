@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with IfcOpenShell.  If not, see <http://www.gnu.org/licenses/>.
 
+import pytest
 import datetime
 import test.bootstrap
 import ifcopenshell.api
@@ -32,10 +33,10 @@ class TestCascadeSchedule(test.bootstrap.IFC4):
         task2 = self._create_task("P1D")
 
         ifcopenshell.api.run("sequence.cascade_schedule", self.file, task=task)
-        assert task.TaskTime.ScheduleStart == "2000-01-01T00:00:00"
-        assert task.TaskTime.ScheduleFinish == "2000-01-02T00:00:00"
-        assert task2.TaskTime.ScheduleStart == "2000-01-01T00:00:00"
-        assert task2.TaskTime.ScheduleFinish == "2000-01-02T00:00:00"
+        assert task.TaskTime.ScheduleStart == "2000-01-01T09:00:00"
+        assert task.TaskTime.ScheduleFinish == "2000-01-01T17:00:00"
+        assert task2.TaskTime.ScheduleStart == "2000-01-01T09:00:00"
+        assert task2.TaskTime.ScheduleFinish == "2000-01-01T17:00:00"
 
     def test_only_cascading_to_successors_not_predecessors(self):
         task = self._create_task("P1D")
@@ -45,13 +46,21 @@ class TestCascadeSchedule(test.bootstrap.IFC4):
         self._create_sequence(task, task3, "FINISH_START", lag="P1D")
 
         ifcopenshell.api.run("sequence.cascade_schedule", self.file, task=task2)
-        assert task.TaskTime.ScheduleStart == "2000-01-01T00:00:00"
-        assert task.TaskTime.ScheduleFinish == "2000-01-02T00:00:00"
-        assert task2.TaskTime.ScheduleStart == "2000-01-02T00:00:00"
-        assert task2.TaskTime.ScheduleFinish == "2000-01-04T00:00:00"
+        assert task.TaskTime.ScheduleStart == "2000-01-01T09:00:00"
+        assert task.TaskTime.ScheduleFinish == "2000-01-01T17:00:00"
+        assert task2.TaskTime.ScheduleStart == "2000-01-02T09:00:00"
+        assert task2.TaskTime.ScheduleFinish == "2000-01-03T17:00:00"
         # We assert that these start finish times have not cascaded
-        assert task3.TaskTime.ScheduleStart == "2000-01-02T00:00:00"
-        assert task3.TaskTime.ScheduleFinish == "2000-01-05T00:00:00"
+        assert task3.TaskTime.ScheduleStart == "2000-01-02T09:00:00"
+        assert task3.TaskTime.ScheduleFinish == "2000-01-04T17:00:00"
+
+    def test_catching_cyclic_relationships(self):
+        task = self._create_task("P1D")
+        task2 = self._create_task("P2D")
+        self._create_sequence(task, task2, "FINISH_START")
+        with pytest.raises(RecursionError):
+            self._create_sequence(task2, task, "FINISH_START")
+            ifcopenshell.api.run("sequence.cascade_schedule", self.file, task=task)
 
     def test_cascading_finish_to_start(self):
         task = self._create_task("P1D")
@@ -61,12 +70,27 @@ class TestCascadeSchedule(test.bootstrap.IFC4):
         self._create_sequence(task, task3, "FINISH_START", lag="P1D")
 
         ifcopenshell.api.run("sequence.cascade_schedule", self.file, task=task)
-        assert task.TaskTime.ScheduleStart == "2000-01-01T00:00:00"
-        assert task.TaskTime.ScheduleFinish == "2000-01-02T00:00:00"
-        assert task2.TaskTime.ScheduleStart == "2000-01-02T00:00:00"
-        assert task2.TaskTime.ScheduleFinish == "2000-01-04T00:00:00"
-        assert task3.TaskTime.ScheduleStart == "2000-01-03T00:00:00"
-        assert task3.TaskTime.ScheduleFinish == "2000-01-06T00:00:00"
+        assert task.TaskTime.ScheduleStart == "2000-01-01T09:00:00"
+        assert task.TaskTime.ScheduleFinish == "2000-01-01T17:00:00"
+        assert task2.TaskTime.ScheduleStart == "2000-01-02T09:00:00"
+        assert task2.TaskTime.ScheduleFinish == "2000-01-03T17:00:00"
+        assert task3.TaskTime.ScheduleStart == "2000-01-03T09:00:00"
+        assert task3.TaskTime.ScheduleFinish == "2000-01-05T17:00:00"
+
+    def test_cascading_finish_to_start_for_milestones(self):
+        task = self._create_task("P0D")
+        task2 = self._create_task("P2D")
+        task3 = self._create_task("P3D")
+        self._create_sequence(task, task2, "FINISH_START")
+        self._create_sequence(task, task3, "FINISH_START", lag="P1D")
+
+        ifcopenshell.api.run("sequence.cascade_schedule", self.file, task=task)
+        assert task.TaskTime.ScheduleStart == "2000-01-01T09:00:00"
+        assert task.TaskTime.ScheduleFinish == "2000-01-01T09:00:00"
+        assert task2.TaskTime.ScheduleStart == "2000-01-01T09:00:00"
+        assert task2.TaskTime.ScheduleFinish == "2000-01-02T17:00:00"
+        assert task3.TaskTime.ScheduleStart == "2000-01-02T09:00:00"
+        assert task3.TaskTime.ScheduleFinish == "2000-01-04T17:00:00"
 
     def test_cascading_finish_to_finish(self):
         task = self._create_task("P1D")
@@ -76,12 +100,12 @@ class TestCascadeSchedule(test.bootstrap.IFC4):
         self._create_sequence(task, task3, "FINISH_FINISH", lag="P1D")
 
         ifcopenshell.api.run("sequence.cascade_schedule", self.file, task=task)
-        assert task.TaskTime.ScheduleStart == "2000-01-01T00:00:00"
-        assert task.TaskTime.ScheduleFinish == "2000-01-02T00:00:00"
-        assert task2.TaskTime.ScheduleStart == "1999-12-31T00:00:00"
-        assert task2.TaskTime.ScheduleFinish == "2000-01-02T00:00:00"
-        assert task3.TaskTime.ScheduleStart == "1999-12-31T00:00:00"
-        assert task3.TaskTime.ScheduleFinish == "2000-01-03T00:00:00"
+        assert task.TaskTime.ScheduleStart == "2000-01-01T09:00:00"
+        assert task.TaskTime.ScheduleFinish == "2000-01-01T17:00:00"
+        assert task2.TaskTime.ScheduleStart == "1999-12-31T09:00:00"
+        assert task2.TaskTime.ScheduleFinish == "2000-01-01T17:00:00"
+        assert task3.TaskTime.ScheduleStart == "1999-12-31T09:00:00"
+        assert task3.TaskTime.ScheduleFinish == "2000-01-02T17:00:00"
 
     def test_cascading_start_to_start(self):
         task = self._create_task("P1D")
@@ -91,12 +115,12 @@ class TestCascadeSchedule(test.bootstrap.IFC4):
         self._create_sequence(task, task3, "START_START", lag="P1D")
 
         ifcopenshell.api.run("sequence.cascade_schedule", self.file, task=task)
-        assert task.TaskTime.ScheduleStart == "2000-01-01T00:00:00"
-        assert task.TaskTime.ScheduleFinish == "2000-01-02T00:00:00"
-        assert task2.TaskTime.ScheduleStart == "2000-01-01T00:00:00"
-        assert task2.TaskTime.ScheduleFinish == "2000-01-03T00:00:00"
-        assert task3.TaskTime.ScheduleStart == "2000-01-02T00:00:00"
-        assert task3.TaskTime.ScheduleFinish == "2000-01-05T00:00:00"
+        assert task.TaskTime.ScheduleStart == "2000-01-01T09:00:00"
+        assert task.TaskTime.ScheduleFinish == "2000-01-01T17:00:00"
+        assert task2.TaskTime.ScheduleStart == "2000-01-01T09:00:00"
+        assert task2.TaskTime.ScheduleFinish == "2000-01-02T17:00:00"
+        assert task3.TaskTime.ScheduleStart == "2000-01-02T09:00:00"
+        assert task3.TaskTime.ScheduleFinish == "2000-01-04T17:00:00"
 
     def test_cascading_start_to_finish(self):
         task = self._create_task("P1D")
@@ -106,15 +130,32 @@ class TestCascadeSchedule(test.bootstrap.IFC4):
         self._create_sequence(task, task3, "START_FINISH", lag="P1D")
 
         ifcopenshell.api.run("sequence.cascade_schedule", self.file, task=task)
-        assert task.TaskTime.ScheduleStart == "2000-01-01T00:00:00"
-        assert task.TaskTime.ScheduleFinish == "2000-01-02T00:00:00"
-        assert task2.TaskTime.ScheduleStart == "1999-12-30T00:00:00"
-        assert task2.TaskTime.ScheduleFinish == "2000-01-01T00:00:00"
-        assert task3.TaskTime.ScheduleStart == "1999-12-30T00:00:00"
-        assert task3.TaskTime.ScheduleFinish == "2000-01-02T00:00:00"
+        assert task.TaskTime.ScheduleStart == "2000-01-01T09:00:00"
+        assert task.TaskTime.ScheduleFinish == "2000-01-01T17:00:00"
+        assert task2.TaskTime.ScheduleStart == "1999-12-30T09:00:00"
+        assert task2.TaskTime.ScheduleFinish == "1999-12-31T17:00:00"
+        assert task3.TaskTime.ScheduleStart == "1999-12-30T09:00:00"
+        assert task3.TaskTime.ScheduleFinish == "2000-01-01T17:00:00"
+
+    def test_cascading_start_to_finish_for_milestones(self):
+        task = self._create_task("P0D")
+        task2 = self._create_task("P2D")
+        task3 = self._create_task("P3D")
+        self._create_sequence(task, task2, "START_FINISH")
+        self._create_sequence(task, task3, "START_FINISH", lag="P1D")
+
+        ifcopenshell.api.run("sequence.cascade_schedule", self.file, task=task)
+        assert task.TaskTime.ScheduleStart == "2000-01-01T09:00:00"
+        assert task.TaskTime.ScheduleFinish == "2000-01-01T09:00:00"
+        assert task2.TaskTime.ScheduleStart == "1999-12-30T09:00:00"
+        assert task2.TaskTime.ScheduleFinish == "1999-12-31T17:00:00"
+        assert task3.TaskTime.ScheduleStart == "1999-12-30T09:00:00"
+        assert task3.TaskTime.ScheduleFinish == "2000-01-01T17:00:00"
 
     def _create_task(self, duration):
         task = ifcopenshell.api.run("sequence.add_task", self.file)
+        if duration == "P0D":
+            task.IsMilestone = True
         task_time = ifcopenshell.api.run("sequence.add_task_time", self.file, task=task)
         ifcopenshell.api.run(
             "sequence.edit_task_time",

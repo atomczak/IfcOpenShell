@@ -14,6 +14,20 @@ Scenario: Create project
     And the object "IfcBuilding/My Building" is in the collection "IfcBuilding/My Building"
     And the object "IfcBuildingStorey/My Storey" is in the collection "IfcBuildingStorey/My Storey"
 
+Scenario: Create project - IFC2X3
+    Given an empty Blender session
+    And I set "scene.BIMProjectProperties.export_schema" to "IFC2X3"
+    When I press "bim.create_project"
+    Then an IFC file exists
+    And the object "IfcProject/My Project" is an "IfcProject"
+    And the object "IfcSite/My Site" is an "IfcSite"
+    And the object "IfcBuilding/My Building" is an "IfcBuilding"
+    And the object "IfcBuildingStorey/My Storey" is an "IfcBuildingStorey"
+    And the object "IfcProject/My Project" is in the collection "IfcProject/My Project"
+    And the object "IfcSite/My Site" is in the collection "IfcSite/My Site"
+    And the object "IfcBuilding/My Building" is in the collection "IfcBuilding/My Building"
+    And the object "IfcBuildingStorey/My Storey" is in the collection "IfcBuildingStorey/My Storey"
+
 Scenario: Append library element
     Given an empty IFC project
     When I press "bim.select_library_file(filepath='{cwd}/test/files/basic.ifc')"
@@ -269,15 +283,26 @@ Scenario: Load project elements - load with the spatial decomposition collection
 Scenario: Load project elements - manual offset of object placements
     Given an empty Blender session
     And I press "bim.load_project(filepath='{cwd}/test/files/manual-geolocation.ifc', is_advanced=True)"
-    When I set "scene.BIMProjectProperties.should_offset_model" to "True"
-    And I set "scene.BIMProjectProperties.model_offset_coordinates" to "-268388.5, -5774506.0, -21.899999618530273"
+    When I set "scene.BIMProjectProperties.false_origin" to "268388500, 5774506000, 21900"
     And I press "bim.load_project_elements"
     Then the object "IfcPlate/1780 x 270 PRECAST WALL" is at "0,0,0"
+
+Scenario: Load project elements - manual offset of cartesian points
+    Given an empty Blender session
+    And I press "bim.load_project(filepath='{cwd}/test/files/manual-geolocation-coords.ifc', is_advanced=True)"
+    When I set "scene.BIMProjectProperties.false_origin" to "1990711,5971553,22700"
+    And I press "bim.load_project_elements"
+    Then the object "IfcBuildingElementProxy/NAME" is at "0,0,0"
 
 Scenario: Load project elements - auto offset of object placements
     Given an empty Blender session
     When I press "bim.load_project(filepath='{cwd}/test/files/auto-geolocation.ifc')"
     Then the object "IfcPlate/1780 x 270 PRECAST WALL" is at "0,0,0"
+
+Scenario: Load project elements - auto offset of cartesian points
+    Given an empty Blender session
+    When I press "bim.load_project(filepath='{cwd}/test/files/manual-geolocation-coords.ifc')"
+    Then the object "IfcBuildingElementProxy/NAME" is at "0,0,0"
 
 Scenario: Unload project
     Given an empty Blender session
@@ -296,6 +321,18 @@ Scenario: Link IFC
     And the object "IfcBeam/Beam" exists
     And the object "IfcBuildingStorey/Ground Floor" exists
     And the object "IfcBuildingStorey/Level 1" exists
+
+Scenario: Toggle link visibility - wireframe mode
+    Given an empty IFC project
+    And I press "bim.link_ifc(filepath='{cwd}/test/files/basic.blend')"
+    When I press "bim.toggle_link_visibility(link='{cwd}/test/files/basic.blend', mode='WIREFRAME')"
+    Then nothing happens
+
+Scenario: Toggle link visibility - visible mode
+    Given an empty IFC project
+    And I press "bim.link_ifc(filepath='{cwd}/test/files/basic.blend')"
+    When I press "bim.toggle_link_visibility(link='{cwd}/test/files/basic.blend', mode='VISIBLE')"
+    Then nothing happens
 
 Scenario: Unload link
     Given an empty Blender session

@@ -81,20 +81,29 @@ class System(blenderbim.core.tool.System):
             new.ifc_class = system.is_a()
 
     @classmethod
-    def load_ports(cls, ports):
+    def load_ports(cls, element, ports):
         if not ports:
             return
+        obj = tool.Ifc.get_object(element)
         ifc_import_settings = import_ifc.IfcImportSettings.factory()
         ifc_importer = import_ifc.IfcImporter(ifc_import_settings)
         ifc_importer.file = tool.Ifc.get()
         ifc_importer.calculate_unit_scale()
+        ifc_importer.process_context_filter()
         ports = set(ports)
         ports -= ifc_importer.create_products(ports)
         for port in ports or []:
             if tool.Ifc.get_object(port):
                 continue
-            ifc_importer.create_product(port)
+            port_obj = ifc_importer.create_product(port)
+            if obj:
+                port_obj.parent = obj
+                port_obj.matrix_parent_inverse = obj.matrix_world.inverted()
         ifc_importer.place_objects_in_collections()
+
+    @classmethod
+    def run_geometry_edit_object_placement(cls, obj=None):
+        return blenderbim.core.geometry.edit_object_placement(tool.Ifc, tool.Geometry, tool.Surveyor, obj=obj)
 
     @classmethod
     def run_root_assign_class(

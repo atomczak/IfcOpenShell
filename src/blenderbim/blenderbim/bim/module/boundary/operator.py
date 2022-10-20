@@ -26,7 +26,7 @@ import blenderbim.bim.import_ifc as import_ifc
 
 
 def get_boundaries_collection(blender_space):
-    space_collection = bpy.data.collections.get(blender_space.name)
+    space_collection = bpy.data.collections.get(blender_space.name, blender_space.users_collection[0])
     collection_name = f"Boundaries/{blender_space.BIMObjectProperties.ifc_definition_id}"
     boundaries_collection = space_collection.children.get(collection_name)
     if not boundaries_collection:
@@ -49,7 +49,7 @@ class Loader:
         if not boundary.ConnectionGeometry:
             return None
         surface = boundary.ConnectionGeometry.SurfaceOnRelatingElement
-        # workaround for unvalid geometry provided by Revit. See https://github.com/IfcOpenShell/IfcOpenShell/issues/635#issuecomment-770366838
+        # workaround for invalid geometry provided by Revit. See https://github.com/IfcOpenShell/IfcOpenShell/issues/635#issuecomment-770366838
         if surface.is_a("IfcCurveBoundedPlane") and not getattr(surface, "InnerBoundaries", None):
             surface.InnerBoundaries = ()
         shape = ifcopenshell.geom.create_shape(self.settings, surface)
