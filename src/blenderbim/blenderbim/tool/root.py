@@ -18,6 +18,7 @@
 
 import bpy
 import ifcopenshell
+import ifcopenshell.util.representation
 import blenderbim.core.tool
 import blenderbim.core.geometry
 import blenderbim.tool as tool
@@ -31,18 +32,37 @@ class Root(blenderbim.core.tool.Root):
         new.obj = obj
 
     @classmethod
+    def assign_body_styles(cls, element, obj):
+        # Should this even be here? Should it be in the geometry tool?
+        body = ifcopenshell.util.representation.get_representation(element, "Model", "Body", "MODEL_VIEW")
+        if body:
+            [
+                tool.Geometry.run_style_add_style(obj=mat)
+                for mat in tool.Geometry.get_object_materials_without_styles(obj)
+            ]
+            ifcopenshell.api.run(
+                "style.assign_representation_styles",
+                tool.Ifc.get(),
+                shape_representation=body,
+                styles=tool.Geometry.get_styles(obj),
+                should_use_presentation_style_assignment=bpy.context.scene.BIMGeometryProperties.should_use_presentation_style_assignment,
+            )
+
+    @classmethod
     def copy_representation(cls, source, dest):
         if dest.is_a("IfcProduct"):
             if not source.Representation:
                 return
             dest.Representation = ifcopenshell.util.element.copy_deep(
-                tool.Ifc.get(), source.Representation, exclude=["IfcGeometricRepresentationContext"]
+                tool.Ifc.get(), source.Representation, exclude=["IfcGeometricRepresentationContext", "IfcProfileDef"]
             )
         elif dest.is_a("IfcTypeProduct"):
             if not source.RepresentationMaps:
                 return
             dest.RepresentationMaps = [
-                ifcopenshell.util.element.copy_deep(tool.Ifc.get(), m, exclude=["IfcGeometricRepresentationContext"])
+                ifcopenshell.util.element.copy_deep(
+                    tool.Ifc.get(), m, exclude=["IfcGeometricRepresentationContext", "IfcProfileDef"]
+                )
                 for m in source.RepresentationMaps
             ]
 
@@ -106,14 +126,16 @@ class Root(blenderbim.core.tool.Root):
     @classmethod
     def recreate_decompositions(cls, relationships, old_to_new):
         for subelement, data in relationships.items():
-            subelement = old_to_new.get(subelement)
-            element = old_to_new.get(data["element"])
-            if not subelement or not element:
+            new_subelements = old_to_new.get(subelement)
+            new_elements = old_to_new.get(data["element"])
+            if not new_subelements or not new_elements:
                 continue
-            if data["type"] == "fill":
-                obj1 = tool.Ifc.get_object(element)
-                obj2 = tool.Ifc.get_object(subelement)
-                bpy.ops.bim.add_filled_opening(voided_obj=obj1.name, filling_obj=obj2.name)
+            for i, new_subelement in enumerate(new_subelements):
+                new_element = new_elements[i]
+                if data["type"] == "fill":
+                    obj1 = tool.Ifc.get_object(new_element)
+                    obj2 = tool.Ifc.get_object(new_subelement)
+                    bpy.ops.bim.add_filled_opening(voided_obj=obj1.name, filling_obj=obj2.name)
 
     @classmethod
     def run_geometry_add_representation(

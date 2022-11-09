@@ -1,5 +1,5 @@
 # BlenderBIM Add-on - OpenBIM Blender Add-on
-# Copyright (C) 2020, 2021 Dion Moult <dion@thinkmoult.com>
+# Copyright (C) 2020, 2021, 2022 Dion Moult <dion@thinkmoult.com>
 #
 # This file is part of BlenderBIM Add-on.
 #
@@ -201,7 +201,9 @@ class ChangeTypePage(bpy.types.Operator, tool.Ifc.Operator):
     page: bpy.props.IntProperty()
 
     def _execute(self, context):
-        context.scene.BIMModelProperties.type_page = self.page
+        props = context.scene.BIMModelProperties
+        bpy.ops.bim.load_type_thumbnails(ifc_class=props.type_class, offset=9 * (self.page - 1), limit=9)
+        props.type_page = self.page
         return {"FINISHED"}
 
 
@@ -316,14 +318,27 @@ class LoadTypeThumbnails(bpy.types.Operator, tool.Ifc.Operator):
     bl_label = "Load Type Thumbnails"
     bl_options = {"REGISTER", "UNDO"}
     ifc_class: bpy.props.StringProperty()
+    limit: bpy.props.IntProperty()
+    offset: bpy.props.IntProperty()
 
     def _execute(self, context):
         from PIL import Image, ImageDraw
 
+        if bpy.app.background:
+            return
+
+        props = bpy.context.scene.BIMModelProperties
         processing = set()
-        # Only process at most one class at a time.
+        # Only process at most one paginated class at a time.
         # Large projects have hundreds of types which can lead to unnecessary lag.
-        queue = tool.Ifc.get().by_type(self.ifc_class)
+        queue = sorted(tool.Ifc.get().by_type(self.ifc_class), key=lambda e: e.Name or "Unnamed")
+        if self.limit:
+            queue = queue[self.offset:self.offset + self.limit]
+        else:
+            offset = 9 * (props.type_page - 1)
+            if offset < 0:
+                offset = 0
+            queue = queue[offset:offset + 9]
 
         unit_scale = ifcopenshell.util.unit.calculate_unit_scale(tool.Ifc.get())
 
@@ -398,7 +413,7 @@ class LoadTypeThumbnails(bpy.types.Operator, tool.Ifc.Operator):
 
                     x_offset = (size / 2) - (width / 2)
                     y_offset = (size / 2) - (height / 2)
-                    draw.rectangle([x_offset, y_offset, width + x_offset, height + y_offset], outline="white", width=2)
+                    draw.rectangle([x_offset, y_offset, width + x_offset, height + y_offset], outline="white", width=5)
                     current_thickness = 0
                     del thicknesses[-1]
                     for thickness in thicknesses:
@@ -410,8 +425,18 @@ class LoadTypeThumbnails(bpy.types.Operator, tool.Ifc.Operator):
                             x = (current_thickness / total_thickness) * width
                             line = [x_offset + x, y_offset, x_offset + x, y_offset + height]
                         draw.line(line, fill="white", width=2)
+                elif False:
+                    # TODO: things like parametric duct segments
+                    pass
+                elif not element.RepresentationMaps:
+                    # Empties are represented by a generic thumbnail
+                    width = height = 100
+                    x_offset = (size / 2) - (width / 2)
+                    y_offset = (size / 2) - (height / 2)
+                    draw.line([x_offset, y_offset, width + x_offset, height + y_offset], fill="white", width=2)
+                    draw.line([x_offset, y_offset + height, width + x_offset, y_offset], fill="white", width=2)
+                    draw.rectangle([x_offset, y_offset, width + x_offset, height + y_offset], outline="white", width=5)
                 else:
-                    # For things like parametric duct segments
                     draw.line([0, 0, size, size], fill="red", width=2)
                     draw.line([0, size, size, 0], fill="red", width=2)
 

@@ -182,7 +182,7 @@ endif
 	cp -r blenderbim/* dist/blenderbim/
 
 	# Provides IfcOpenShell Python functionality
-	cd dist/working && wget https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-$(PYNUMBER)-v0.7.0-fa6bbf2-$(PLATFORM)64.zip
+	cd dist/working && wget https://s3.amazonaws.com/ifcopenshell-builds/ifcopenshell-python-$(PYNUMBER)-v0.7.0-cdde536-$(PLATFORM)64.zip
 	cd dist/working && unzip ifcopenshell-python*
 	cp -r dist/working/ifcopenshell dist/blenderbim/libs/site/packages/
 
@@ -310,6 +310,13 @@ endif
 	cd dist/working && wget https://files.pythonhosted.org/packages/5b/ef/f97c3e1a7efa00e989a793fe15297214fc95ad7d9e3810586bd08ce9f0f3/xmlschema-2.0.2.tar.gz
 	cd dist/working && tar -xzvf xmlschema*
 	cp -r dist/working/xmlschema-2.0.2/xmlschema dist/blenderbim/libs/site/packages/
+	rm -rf dist/working
+
+	# Required by bcf
+	mkdir dist/working
+	cd dist/working && wget https://files.pythonhosted.org/packages/ad/c7/17c9d16320d8e2cfdb27d2fd298b5e8f7a3f211025b0c1bc7a39a85bd690/xsdata-22.11.tar.gz
+	cd dist/working && tar -xzvf xsdata*
+	cp -r dist/working/xsdata-22.11/xsdata dist/blenderbim/libs/site/packages/
 	rm -rf dist/working
 
 	# Required by bcf
